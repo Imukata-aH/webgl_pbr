@@ -7,6 +7,7 @@ var camera, scene, renderer;
 var windowHalfX = window.innerWidth / 2;
 var windowHalfY = window.innerHeight / 2;
 
+var cubeTexture;
 var material;
 
 var BRDFFragmentShader = {};
@@ -33,30 +34,12 @@ function init()
     light.position.set(10, 10, 10);
     scene.add(light);
 
-    //var cubeMapTex = initCubeMap();
-    //initCubeMap();
-
     initShader();
+    loadTexture();
 
-    material = new THREE.ShaderMaterial({
-        uniforms: {
-            u_lightColor: {type: 'v3', value: new THREE.Vector3(light.color.r, light.color.g, light.color.b)},
-            u_lightPos: {type: 'v3', value: light.position},
-            u_diffuseColor: {type: 'v3', value: new THREE.Vector3(33.0 / 255.0, 148.0 / 255.0, 206.0 / 255.0)}, // albedo
-            u_ambientColor: {type: 'v3', value: new THREE.Vector3(25.0 / 255.0, 25.0 / 255.0, 25.0 / 255.0)},
-            u_roughness: {type: 'f', value: 0.3},
-            u_fresnel: {type: 'v3', value: new THREE.Vector3(197.0 / 255.0, 197.0 / 255.0, 197.0 / 255.0)}, // F0
-        },
-        vertexShader: document.getElementById('vertexShader').textContent,
-        fragmentShader: currentFragShader,
-    });
-
-    var loader = new THREE.JSONLoader();
-    loader.load('./objects/bunny.json', function(geometry, materials)
-    {
-        var mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
-    });
+    initEnvCube(cubeTexture);    
+    initObject(light, cubeTexture);
+    
 
     renderer = new THREE.WebGLRenderer();
     renderer.setClearColor(0x000000, 1);
@@ -116,7 +99,7 @@ function initShader() {
     + BRDFFragmentShader.main;
 }
 
-function initCubeMap()
+function loadTexture()
 {
     var urlPrefix = "./cubemap/chapel/";
     var urls = [
@@ -129,22 +112,47 @@ function initCubeMap()
     ];
 
     var loader = new THREE.CubeTextureLoader();
-    loader.load(urls, function(textureCube) 
+    cubeTexture = loader.load(urls);
+}
+
+function initEnvCube(textureCube)
+{
+    textureCube.Format = THREE.RGBFormat;
+    var shader = THREE.ShaderLib["cube"];
+    shader.uniforms["tCube"].value = textureCube;
+    var material = new THREE.ShaderMaterial
+    ({
+        fragmentShader  :shader.fragmentShader,
+        vertexShader    :shader.vertexShader,
+        uniforms        :shader.uniforms,
+        depthWrite      :false,
+        side            :THREE.BackSide,
+    });
+
+    skyBoxMesh = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), material);
+    scene.add(skyBoxMesh);
+}
+
+function initObject(light, textureCube)
+{
+    material = new THREE.ShaderMaterial({
+        uniforms: {
+            u_lightColor: {type: 'v3', value: new THREE.Vector3(light.color.r, light.color.g, light.color.b)},
+            u_lightPos: {type: 'v3', value: light.position},
+            u_diffuseColor: {type: 'v3', value: new THREE.Vector3(33.0 / 255.0, 148.0 / 255.0, 206.0 / 255.0)}, // albedo
+            u_ambientColor: {type: 'v3', value: new THREE.Vector3(25.0 / 255.0, 25.0 / 255.0, 25.0 / 255.0)},
+            u_roughness: {type: 'f', value: 0.6},
+            u_fresnel: {type: 'v3', value: new THREE.Vector3(197.0 / 255.0, 197.0 / 255.0, 197.0 / 255.0)}, // F0
+            u_tCube: {type: 't', value: textureCube},
+        },
+        vertexShader: document.getElementById('vertexShader').textContent,
+        fragmentShader: currentFragShader,
+    });
+
+    var loader = new THREE.JSONLoader();
+    loader.load('./objects/bunny.json', function(geometry, materials)
     {
-        textureCube.Format = THREE.RGBFormat;
-        var shader = THREE.ShaderLib["cube"];
-        shader.uniforms["tCube"].value = textureCube;
-        var material = new THREE.ShaderMaterial({
-            fragmentShader  :shader.fragmentShader,
-            vertexShader    :shader.vertexShader,
-            uniforms        :shader.uniforms,
-            depthWrite      :false,
-            side            :THREE.BackSide,
-        });
-
-        skyBoxMesh = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), material);
-        scene.add(skyBoxMesh);
-
-        //return textureCube;
+        var mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
     });
 }
