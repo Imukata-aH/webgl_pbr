@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset=utf-8>
+		<title>PBR Sample Scene</title>
+		<style>
+			body { margin: 0; }
+			canvas { width: 100%; height: 100% }
+		</style>
+	</head>
+	<body>
+        <div id="container" style="width: 100%; height: 100%;"></div>
+		<script src="js/three.js"></script>
+        <script src="js/OrbitControls.js"></script>
+
+        <script id="vertexShader" type="x-shader/x-vertex">
+			precision mediump float;
+			precision mediump int;
+
+			varying vec4 vPosition;
+			varying vec3 vViewPosition;
+			varying vec4 vNormal;
+			varying vec3 vViewNormal;
+
+			void main(){
+				vViewPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
+				vNormal = vec4(normal.xyz, 0.0);
+				vViewNormal = normalMatrix * normal.xyz;
+				vPosition = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+				gl_Position = vPosition;
+			}
+        </script>
+
+        <script id="fragmentShader_param" type="x-shader/x-fragment">
+			precision mediump float;
+			precision mediump int;
+
+			uniform vec3 u_lightColor;
+			uniform vec3 u_lightDir;
+			uniform vec3 u_lightPos;
+			uniform vec3 u_viewPos;
+			uniform vec3 u_diffuseColor;
+			uniform float u_roughness;
+			uniform vec3 u_fresnel;
+			uniform float u_alpha;
+			uniform vec3 u_ambientColor;
+			uniform samplerCube u_tCube;
+			uniform float u_time;
+
+
+			varying vec4 vPosition;
+			varying vec3 vViewPosition;
+			varying vec4 vNormal;
+			varying vec3 vViewNormal;
+			varying vec2 vUv;
+
+			#define M_PI 3.1415926535897932384626433832795
+
+			float dotClamped(vec3 a, vec3 b)
+			{
+				return max(dot(a, b), 0.0);
+			}
+
+			// Fresnel refrection term
+			// Schlick's approximation
+			// F0 は波長（RGB）ごとの値である
+			vec3 F(vec3 f0, vec3 v, vec3 h)
+			{
+				float VdH = dot(v, h);
+				float fresnelX = f0.x + pow((1.0 - f0.x) * VdH, 5.0);
+				float fresnelY = f0.y + pow((1.0 - f0.y) * VdH, 5.0);
+				float fresnelZ = f0.z + pow((1.0 - f0.z) * VdH, 5.0);
+				return vec3(fresnelX, fresnelY, fresnelZ);
+				//return f0 + ((1.0 - f0) * pow((1.0 - f0) * VdH, 5.0));
+			}
+        </script>
+
+		<script id="NDF_GGX" type="x-shader/x-fragment">
+			float N(float a, float NdH)
+			{
+				float a2 = a*a;
+				return a2 / (M_PI * pow(pow(NdH, 2.0) * (a2 - 1.0) + 1.0, 2.0));
+			}
+		</script>
+
+		<script id="G_ShlickGGX" type="x-shader/x-fragment">
+			float G(float a, float NdV, float NdL)
+			{
+				float k = a * 0.5;
+				float GV = NdV / ((NdV * (1.0 - k)) + k);
+				float GL = NdL / ((NdL * (1.0 - k)) + k);
+				return GV * GL;
+			}
+		</script>
+
+		<script id="fragmentShader_main" type="x-shader/x-fragment">
+			void main() 
+			{
+				// 必要なベクトルの計算
+				// ベクトル計算はビュースペースで統一
+
+				vec3 viewPosition = normalize(vViewPosition);
+				
+				vec4 viewLightPos = viewMatrix * vec4(u_lightPos, 1.0);
+				vec3 L = viewLightPos.xyz - viewPosition.xyz;
+				L = normalize(L);
+				vec3 NN = normalize(vViewNormal.xyz);	// normalized normal
+				vec3 V = normalize(-vViewPosition);
+				vec3 H = normalize(L + V);
+
+				float NdV = max(dot(NN, V), 0.0);
+				float NdL = max(dot(NN, L), 0.0);
+				float NdH = max(dot(NN, H), 0.0);
+
+				// 設置した光源に対するシェーディング(単一光源を前提)
+				// Cook-Torrance モデルを使用
+				
+				// Microfacet モデルによる BRDF を計算
+
+				// Microfacet BRDF の Specular 項
+				float a = u_roughness * u_roughness;
+
+				vec3 fresnelSpecular = F(u_fresnel, L, H);
+				float geometryFactor = G(a, NdV, NdL);
+				float normalDistributionFactor = N(a, NdH);
+
+				vec3 microfacetSpecularTerm = (fresnelSpecular * geometryFactor * normalDistributionFactor) / (4.0 * NdL * NdV + 0.00001);
+
+				vec3 specularColor = microfacetSpecularTerm * u_lightColor * NdL;
+
+				// Microfacet BRDF の Diffuse 項
+				vec3 microfacetDiffuseTerm = u_diffuseColor / M_PI;	// Lambertian diffuse
+				vec3 diffuseColor = microfacetDiffuseTerm * u_lightColor * NdL;
+				diffuseColor *= (vec3(1.0) - fresnelSpecular);	// energy conservation
+
+				gl_FragColor = vec4(diffuseColor + specularColor + u_ambientColor * u_diffuseColor, 1.0);
+			}
+		</script>
+
+        <script src="./main.js"></script>
+	</body>
+</html>
