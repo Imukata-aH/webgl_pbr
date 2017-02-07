@@ -76,6 +76,26 @@
 			}
         </script>
 
+		<script id="NDF_BlinnPhong" type="x-shader/x-fragment">
+			float N(float a, float NdH)
+			{
+				float a2 = a*a;
+				float powTerm = ( 2.0 / a2 ) - 2.0;
+				return ( pow( NdH, powTerm ) / ( M_PI * a2 ) );
+			}
+		</script>
+
+		<script id="NDF_Beckman" type="x-shader/x-fragment">
+			float N(float a, float NdH)
+			{
+				float a2 = a*a;
+				float NdH2 = NdH * NdH;
+				float denom = M_PI * a2 * NdH2 * NdH2;
+				float num = exp( ( NdH2 - 1.0 ) / ( a2 * NdH2 ) );
+				return num / denom;
+			}
+		</script>
+
 		<script id="NDF_GGX" type="x-shader/x-fragment">
 			float N(float a, float NdH)
 			{
@@ -84,12 +104,101 @@
 			}
 		</script>
 
+		<script id="G_Implicit" type="x-shader/x-fragment">
+			float G(float a, vec3 NN, vec3 H, vec3 L, vec3 V, float NdV, float NdL)
+			{
+				return NdL * NdV;
+			}
+		</script>
+
+		<script id="G_Neumann" type="x-shader/x-fragment">
+			float G(float a, vec3 NN, vec3 H, vec3 L, vec3 V, float NdV, float NdL)
+			{
+				float num = NdL * NdV;
+				float denom = max(NdL, NdH);
+				return num / denom;
+			}
+		</script>
+
+		<script id="G_CookTorrance" type="x-shader/x-fragment">
+			float G(float a, vec3 NN, vec3 H, vec3 L, vec3 V, float NdV, float NdL)
+			{
+				float NdH = dotClamped( NN, H );
+				float VdH = dotClamped( V, H );
+				float minDot = min( NdV, NdL );
+				float comparison = ( 2.0 * NdH * minDot ) / VdH;
+				return min( 1.0, comparison );
+			}
+		</script>
+
+		<script id="G_Kelemen" type="x-shader/x-fragment">
+			float G(float a, vec3 NN, vec3 H, vec3 L, vec3 V, float NdV, float NdL)
+			{
+				float VdH = dotClamped(V, H);
+				return ( NdL * NdV ) / ( VdH * VdH );
+			}
+		</script>
+
+		<script id="G_Beckmann" type="x-shader/x-fragment">
+			float G_BeckmannHelper_c(float a, float dotTerm)
+			{
+				float sqrtTerm = sqrt( 1.0 - ( dotTerm * dotTerm ));
+				return dotTerm / ( a * sqrtTerm );
+			}
+
+			float G_BeckmannHelper_G1(float c)
+			{
+				if( c < 1.6 )
+				{
+					float c2 = c * c;
+					float num = 3.535 * c + 2.181 * c2;
+					float denom = 1.0 + 2.276 * c + 2.577 * c2;
+					return num / denom;
+				}
+				else
+				{
+					return 1.0;
+				}
+			}
+
+			float G(float a, vec3 NN, vec3 H, vec3 L, vec3 V, float NdV, float NdL)
+			{
+				float cV = G_BeckmannHelper_c( a, NdV );
+				float cL = G_BeckmannHelper_c( a, NdL );
+
+				float GV = G_BeckmannHelper_G1( cV );
+				float GL = G_BeckmannHelper_G1( cL );
+
+				return GV * GL;
+			}
+		</script>
+
+		<script id="G_ShlickBeckmann" type="x-shader/x-fragment">
+			float HelperG1(float k, float dotTerm)
+			{
+				return dotTerm / ((dotTerm * (1.0 - k)) + k);
+			}
+
+			float G(float a, vec3 NN, vec3 H, vec3 L, vec3 V, float NdV, float NdL)
+			{
+				float k = a * sqrt( 2.0 / M_PI );
+				float GV = HelperG1( k, NdV );
+				float GL = HelperG1( k, NdL );
+				return GV * GL;
+			}
+		</script>
+
 		<script id="G_ShlickGGX" type="x-shader/x-fragment">
-			float G(float a, float NdV, float NdL)
+			float HelperG1(float k, float dotTerm)
+			{
+				return dotTerm / ((dotTerm * (1.0 - k)) + k);
+			}
+
+			float G(float a, vec3 NN, vec3 H, vec3 L, vec3 V, float NdV, float NdL)
 			{
 				float k = a * 0.5;
-				float GV = NdV / ((NdV * (1.0 - k)) + k);
-				float GL = NdL / ((NdL * (1.0 - k)) + k);
+				float GV = HelperG1( k, NdV );
+				float GL = HelperG1( k, NdL );
 				return GV * GL;
 			}
 		</script>
@@ -122,7 +231,7 @@
 				float a = u_roughness * u_roughness;
 
 				vec3 fresnelSpecular = F(u_fresnel, L, H);
-				float geometryFactor = G(a, NdV, NdL);
+				float geometryFactor = G(a, NN, H, L, V, NdV, NdL);
 				float normalDistributionFactor = N(a, NdH);
 
 				vec3 microfacetSpecularTerm = (fresnelSpecular * geometryFactor * normalDistributionFactor) / (4.0 * NdL * NdV + 0.00001);

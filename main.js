@@ -79,16 +79,16 @@ function initShader() {
     BRDFFragmentShader.init = document.getElementById( 'fragmentShader_param' ).textContent;
 
     BRDFFragmentShader.N = [];
-    //BRDFFragmentShader.N['BlinnPhong'] = document.getElementById( 'NDFBlinnPhong' ).textContent;
-    //BRDFFragmentShader.N['Beckmann'] = document.getElementById( 'NDFBeckmann' ).textContent;
+    BRDFFragmentShader.N['BlinnPhong'] = document.getElementById( 'NDF_BlinnPhong' ).textContent;
+    BRDFFragmentShader.N['Beckmann'] = document.getElementById( 'NDF_Beckman' ).textContent;
     BRDFFragmentShader.N['GGX'] = document.getElementById( 'NDF_GGX' ).textContent;
 
     BRDFFragmentShader.G = [];
-    //   BRDFFragmentShader.G['Implicit'] = document.getElementById( 'GImplicit' ).textContent;
-    //   BRDFFragmentShader.G['CookTorrance'] = document.getElementById( 'GCookTorrance' ).textContent;
-    //   BRDFFragmentShader.G['Kelemen'] = document.getElementById( 'GKelemen' ).textContent;
-    //   BRDFFragmentShader.G['Beckmann'] = document.getElementById( 'GBeckmann' ).textContent;
-    //   BRDFFragmentShader.G['Schlick_Beckmann'] = document.getElementById( 'GSchlick_Beckmann' ).textContent;
+    BRDFFragmentShader.G['Implicit'] = document.getElementById( 'G_Implicit' ).textContent;
+    BRDFFragmentShader.G['CookTorrance'] = document.getElementById( 'G_CookTorrance' ).textContent;
+    BRDFFragmentShader.G['Kelemen'] = document.getElementById( 'G_Kelemen' ).textContent;
+    BRDFFragmentShader.G['Beckmann'] = document.getElementById( 'G_Beckmann' ).textContent;
+    BRDFFragmentShader.G['Schlick_Beckmann'] = document.getElementById( 'G_ShlickBeckmann' ).textContent;
     BRDFFragmentShader.G['ShlickGGX'] = document.getElementById( 'G_ShlickGGX' ).textContent;
 
     BRDFFragmentShader.main = document.getElementById( 'fragmentShader_main' ).textContent;
