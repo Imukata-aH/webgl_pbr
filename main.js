@@ -25,7 +25,7 @@ function init()
     container = document.getElementById('container');
     document.body.appendChild(container);
 
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1500);
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
     camera.position.z = 2;
     camera.position.x = 1;
     camera.lightDir = new THREE.Vector3(-1, -1, -1);
@@ -141,29 +141,24 @@ function initObject(light, textureCube)
     material = new THREE.ShaderMaterial({
         uniforms: {
             u_lightPos: {type: 'v3', value: light.position},
-            u_roughness: {type: 'f', value: propertyGUI.roughness },
+            u_roughness: {type: 'f', value: propertyGUI.roughness},
+            u_metalness: {type: 'f', value: propertyGUI.metalness},
             u_tCube: {type: 't', value: textureCube},
             u_lightColor: {type: 'v3', value:       // point light's color
                 new THREE.Vector3(
                     light.color.r, 
                     light.color.g, 
                     light.color.b)},
-            u_diffuseColor: {type: 'v3', value:     // albedo
-                new THREE.Vector3(
-                    propertyGUI.diffuse[0] / 255.0, 
-                    propertyGUI.diffuse[1] / 255.0, 
-                    propertyGUI.diffuse[2] / 255.0)}, 
             u_ambientColor: {type: 'v3', value:     // ambient light color
                 new THREE.Vector3(
                     25.0 / 255.0, 
                     25.0 / 255.0, 
                     25.0 / 255.0)},
-            u_fresnel: {type: 'v3', value:          // specular F0
+            u_baseColor: {type: 'v3', value:        // base color (UE4) = albedo (Marmoset Toolbag)
                 new THREE.Vector3(
-                    propertyGUI.fresnel[0] / 255.0, 
-                    propertyGUI.fresnel[1] / 255.0, 
-                    propertyGUI.fresnel[2] / 255.0)},
-            
+                    propertyGUI.base_color[0] / 255.0, 
+                    propertyGUI.base_color[1] / 255.0, 
+                    propertyGUI.base_color[2] / 255.0)}, 
         },
         vertexShader: document.getElementById('vertexShader').textContent,
         fragmentShader: currentFragShader,
@@ -178,43 +173,44 @@ function initObject(light, textureCube)
 }
 
 function property() {
-  this.roughness = 0.3;
-  this.fresnel = [197, 197, 197];
-  this.diffuse = [33, 148, 206];
-  this.Normal_Dirstribution_Function = 'GGX';
-  this.Geometric_Shadowing = 'ShlickGGX';
-  this.Cube_Map_Name = 'chapel';
+    this.roughness = 0.3;
+    this.metalness = 0.0;
+    this.base_color = [33, 148, 206];
+    this.Normal_Dirstribution_Function = 'GGX';
+    this.Geometric_Shadowing = 'ShlickGGX';
+    this.Cube_Map_Name = 'chapel';
 }
 
 window.onload = function() 
 {
-  function roughnessCallback(value) {
+  function roughnessCallback(value) 
+  {
     material.uniforms['u_roughness'].value = propertyGUI.roughness;
   }
 
-  function fresnelCallback(value) {
-    var newFresnel = propertyGUI.fresnel;
-    material.uniforms['u_fresnel'].value = new THREE.Vector3(newFresnel[0] / 255.0, newFresnel[1] / 255.0, newFresnel[2] / 255.0);
+  function metalnessCallback(value) 
+  {
+    material.uniforms['u_metalness'].value = propertyGUI.metalness;
   }
 
-  function diffuseCallback(value)
+  function baseColorCallback(value)
   {
-      var newDiffuse = propertyGUI.diffuse;
-      material.uniforms['u_diffuseColor'].value = new THREE.Vector3(newDiffuse[0] / 255.0, newDiffuse[1] / 255.0, newDiffuse[2] / 255.0);
+      var newBaseColor = propertyGUI.base_color;
+      material.uniforms['u_baseColor'].value = new THREE.Vector3(newBaseColor[0] / 255.0, newBaseColor[1] / 255.0, newBaseColor[2] / 255.0);
   }
 
   var datGui = new dat.GUI();
-  var roughnessController = datGui.add(propertyGUI, 'roughness', 0.01, 1.0);
+  var roughnessController = datGui.add(propertyGUI, 'roughness', 0.0, 1.0);
   roughnessController.onChange(roughnessCallback);
   roughnessController.onFinishChange(roughnessCallback);
 
-  var fresnelController = datGui.addColor(propertyGUI, 'fresnel');
-  fresnelController.onChange(fresnelCallback);
-  fresnelController.onFinishChange(fresnelCallback);
+  var metalnessController = datGui.add(propertyGUI, 'metalness', 0.0, 1.0);
+  metalnessController.onChange(metalnessCallback);
+  metalnessController.onFinishChange(metalnessCallback);
 
-  var diffuseController = datGui.addColor(propertyGUI, 'diffuse');
-  diffuseController.onChange(diffuseCallback);
-  diffuseController.onFinishChange(diffuseCallback);
+  var baseColorController = datGui.addColor(propertyGUI, 'base_color');
+  baseColorController.onChange(baseColorCallback);
+  baseColorController.onFinishChange(baseColorCallback);
 
   var NDFController = datGui.add(propertyGUI, 'Normal_Dirstribution_Function', ['BlinnPhong', 'Beckmann', 'GGX']);
   NDFController.onFinishChange(function(value){
