@@ -38,7 +38,7 @@ function init()
     scene.add(light);
 
     initShader();
-    loadTexture();
+    loadTexture(propertyGUI.Cube_Map_Name);
 
     initEnvCube(cubeTexture);
     initObject(light, cubeTexture);
@@ -102,9 +102,9 @@ function initShader() {
     + BRDFFragmentShader.main;
 }
 
-function loadTexture()
+function loadTexture(cubeMapName)
 {
-    var urlPrefix = "./cubemap/chapel/";
+    var urlPrefix = "./cubemap/" + cubeMapName + "/";
     var urls = [
         urlPrefix + "posx.jpg",
         urlPrefix + "negx.jpg",
@@ -239,7 +239,8 @@ window.onload = function()
 
   var cubeMapController = datGui.add(propertyGUI, 'Cube_Map_Name', ['chapel', 'beach', 'church']);
   cubeMapController.onFinishChange(function(value) {
-    cubeTexture = initiCubeMap();
+    loadTexture(propertyGUI.Cube_Map_Name);
+    initEnvCube(cubeTexture)
     material.uniforms.u_tCube.value = cubeTexture;
   });
 }
