@@ -237,7 +237,7 @@ window.onload = function()
   })
 
 
-  var cubeMapController = datGui.add(propertyGUI, 'Cube_Map_Name', ['chapel', 'beach', 'church']);
+  var cubeMapController = datGui.add(propertyGUI, 'Cube_Map_Name', ['chapel', 'yokohama_night', 'yokohama']);
   cubeMapController.onFinishChange(function(value) {
     loadTexture(propertyGUI.Cube_Map_Name);
     initEnvCube(cubeTexture)
