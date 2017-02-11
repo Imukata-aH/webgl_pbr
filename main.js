@@ -174,7 +174,7 @@ function initObject(light, textureCube)
 
 function property() {
     this.roughness = 0.3;
-    this.metalness = 0.0;
+    this.metalness = 0.1;
     this.base_color = [33, 148, 206];
     this.Normal_Dirstribution_Function = 'GGX';
     this.Geometric_Shadowing = 'ShlickGGX';
