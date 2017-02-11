@@ -46,7 +46,6 @@
 			uniform float u_metalness;
 			
 			uniform samplerCube u_tCube;
-			uniform float u_time;
 
 			varying vec4 vPosition;
 			varying vec3 vViewPosition;
@@ -193,41 +192,97 @@
 		</script>
 
 		<script id="fragmentShader_main" type="x-shader/x-fragment">
-			// float radicalInverse_VdC(int bits)
-			// {
-			// 	bits = (bits << 16) | (bits >> 16);
-			// 	bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1);
-			// 	bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2);
-			// 	bits = ((bits & 0x0specularspecularspecularF) << 4) | ((bits & 0xspecularspecularspecularspecular) >> 4);
-			// 	bits = ((bits & 0x00Fspecular0FF) << 8) | ((bits & 0xFspecular0Fspecular0) >> 8);
-			// 	return float(bits) * 2.3283064365386963e-10; // / 0x100000000
-			// }
+			// Generate van der Corput sequence as Low Discrepancy Sequence
+			// [in] i    : 変換する値
+			// [in] base : 基数
+			float RadicalInverse_VdC(int i, int base)
+			{
+				float reversedBase = 1.0 / float(base);				
+				float f = 1.0 * reversedBase;
+				float factor = f;
+				float h = 0.0;
+				for( int n = 0; n < 100000; n++ )	// dummy condition due to GLSL ES loop constraint
+				{
+					h += float(mod(float(i), float(base))) * factor;
+					factor *= f;
+					i = int( float(i) * reversedBase);
+					if( i <= 0) { break; }
+				}
 
-			// Get Hammersley point set
-			// vec2 Hammersly(int i, int numSamples)
-			// {
-			// 	vec2 Xi = vec2(0.0);
+				return h;
+			}
+
+			// Generate Hammersley point set
+			vec2 Hammersly(int i, int numSamples)
+			{
+				vec2 Xi = vec2(0.0);
 				
-			// 	float i_float = float(i);
-			// 	float N_float = float(numSamples);
-			// 	Xi.x = i_float / N_float;
-			// 	// Y conponent of Hammersly point set is van der Corput sequence.
-			// 	Xi.y = radicalInverse_VdC(i);
+				float i_float = float(i);
+				float N_float = float(numSamples);
+				Xi.x = i_float / N_float;
+				// Y conponent of Hammersly point set is van der Corput sequence.
+				Xi.y = RadicalInverse_VdC(i, 2);
 
-			// 	return Xi;
-			// }
+				return Xi;
+			}
 
-			// vec3 specularIBL(vec3 specular, float a, vec3 NN, vec3 V)
-			// {
-			// 	vec3 specularLighting = vec3(0.0);
-			// 	const int numSamples = 32;
+			vec3 ImportanceSamplingGGX(vec2 Xi, float a, vec3 NN)
+			{
+				float phi = 2.0 * M_PI * Xi.x;
+				float cosTheta = sqrt( (1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y) );
+				float sinTheta = sqrt( 1.0 - cosTheta * cosTheta );
+
+				vec3 H;
+				H.x = sinTheta * cos(phi);
+				H.y = sinTheta * sin(phi);
+				H.z = cosTheta;
+
+				vec3 upVector = abs(NN.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+				vec3 tangentX = normalize(cross(upVector, NN));
+				vec3 tangentY = cross(NN, tangentX);
+
+				// Tangent to world space
+				return tangentX * H.x + tangentY * H.y + NN * H.z;
+			}
+
+			// Solve radiance integral using quasi-Monte Carlo (importance sampling)
+			vec3 SpecularIBL(vec3 baseSpecular, float a, vec3 NN, vec3 V)
+			{
 				
-			// 	for (int sample = 0; sample < numSamples; sample++) 
-			// 	{
-			// 		// Monte Carlo 法のサンプル列として Hammersly Point Set を利用
-			// 		vec2 Xi = Hammersly(sample, numSamples);
-			// 	}
-			// }
+				vec3 specularLighting = vec3(0.0);
+				const int numSamples = 32;
+				
+				for (int sample = 0; sample < numSamples; sample++) 
+				{
+					// Monte Carlo 法のサンプル列として Hammersly Point Set を利用
+					vec2 Xi = Hammersly(sample, numSamples);
+
+					vec3 H = ImportanceSamplingGGX(Xi, a, NN);
+					vec3 L = 2.0 * dot(V, H) * H - V;
+
+					float NdV = dotClamped(NN, V);
+					float NdL = dotClamped(NN, L);
+					float NdH = dotClamped(NN, H);
+					float VdH = dotClamped( V, H);
+					float LdH = dotClamped( L, H);
+
+					if(NdL > 0.0)
+					{
+						vec3 sampleColor = textureCube(u_tCube, L).xyz;
+
+						float getometry = G(a, NdH, VdH, NdV, NdL);
+						vec3  fresnel   = F(baseSpecular, LdH);
+
+						// Given formula deformation of importance sampling, reflectance equation is deformed as below.
+						// Incident light (Li * cos) = sampleColor * NdL
+						// Micofacet specular (f)    = (F * G * D) / (4 * NdL * NdV)
+						// pdf                       = (D * NdH) / (4 * VdH)
+						specularLighting += (sampleColor * fresnel * getometry * VdH) / (NdH * NdV);
+					}
+				}
+
+				return specularLighting / float(numSamples);
+			}
 
 			void main() 
 			{
@@ -251,6 +306,8 @@
 
 
 				// 設置した光源に対するシェーディング(punctual light source の単一光源を前提)
+				vec3 specularColor = vec3(0.0);
+				vec3 diffuseColor  = vec3(0.0);
 
 				// Calculate base specular color (= F(0)) and base diffuse color based on metalness.
 				// Non-metal material's specular color = vec3(0.04) gray.
@@ -268,20 +325,20 @@
 
 				vec3 microfacetSpecularTerm = (fresnelSpecular * geometryFactor * normalDistributionFactor) / (4.0 * NdL * NdV + 0.00001);
 
-				vec3 specularColor = microfacetSpecularTerm * u_lightColor * NdL;
+				specularColor += microfacetSpecularTerm * u_lightColor * NdL;
 
 				// BRDF の Diffuse 項を計算
 				vec3 diffuseTerm = baseDiffuse / M_PI;			// Lambertian diffuse
-				vec3 diffuseColor = diffuseTerm * u_lightColor * NdL;	
+				diffuseColor += diffuseTerm * u_lightColor * NdL;	
 				diffuseColor *= (vec3(1.0) - fresnelSpecular);	// energy conservation
 				
 				// Assumed punctual light sources, M_PI need to be multiplied.
-				diffuseColor *= M_PI;
+				diffuseColor  *= M_PI;
 				specularColor *= M_PI;
 
 				// Image Based Lighting による specular color を加算
-				// var specularColorFromIBL = specularIBL();
-				// specularColor += specularColorFromIBL;
+				vec3 specularColorFromIBL = SpecularIBL(baseSpecular, a, NN, V);
+				specularColor += specularColorFromIBL;
 
 				gl_FragColor = vec4(diffuseColor + specularColor + u_ambientColor * u_baseColor, 1.0);
 			}
